@@ -8,23 +8,13 @@
 #define IRLEDpin  3              //the arduino pin connected to IR LED to ground. HIGH=LED ON
 #define BITtime   397            //length of the carrier bit in microseconds
 #define Setuptime   1640            //length of the carrier bit in microseconds
-//put your own code here - 4 bytes (ADDR1 | ADDR2 | COMMAND1 | COMMAND2)
-//unsigned long IRcode=0b11000001110001111100000000111111;  
-unsigned long   codeOff=   0b00010100110110010001011010100011;  // study off
-unsigned long   codeLow=   0b00011000110110010001011010100011;  // study low
-unsigned long   codeMedium=0b00010000110110010001011010100011;  // study medium
-unsigned long   codeHigh=  0b00010001110110010001011010100011;  // study high
-//unsigned long   codeOff=   0b00010100111010010001011010100011;  // bed1 off
-//unsigned long   codeLow=   0b00011000111010010001011010100011;  // bed1 low
-//unsigned long   codeMedium=0b00010000111010010001011010100011;  // bed1 medium
-//unsigned long   codeHigh=  0b00010001111010010001011010100011;  // bed1 high
 
-// SOME CODES:
-// Canon WL-D89 video remote START/STOP button = 0b11000001110001111100000000111111
+unsigned char codeBase[] = {0xA3, 0x16, 0x09, 0x00};
 
 void setup()
 {
   IRsetup();                          //Only need to call this once to setup
+//  Serial.begin(115200);
 }
 
 void IRsetup(void)
@@ -46,7 +36,6 @@ void WriteBit(bool high)
   delayMicroseconds(BITtime);
 }
 
-//Sends the IR code in 4 byte NEC format
 void IRSendCode(unsigned long code)
 {
   auto codeCache = code;
@@ -66,12 +55,42 @@ void IRSendCode(unsigned long code)
     delayMicroseconds(BITtime);
     
     //send the user defined 4 byte/32bit code
+    // MSB encoded, because WTF?
     for (int i=32; i>0; i--)            //send all 4 bytes or 32 bits
     {
       WriteBit(codeCache & 0x1);            //get the current bit by masking all but the MSB
       codeCache >>= 1;
     }
    }
+}
+
+unsigned long commandArrayToTransmit(unsigned char cmd[]) {
+  unsigned long code =  cmd[3] * (1L << 24);
+                code += cmd[2] * (1L << 16);
+                code += cmd[1] * (1L << 8);
+                code += cmd[0] * (1L << 0);
+    return code;
+}
+
+#define CMD_OFF    0x14
+#define CMD_LOW    0x18
+#define CMD_MEDIUM 0x10
+#define CMD_HIGH   0x11
+
+// high nibble is DIP switch address on units
+#define ADDR_BED_1 0b1110
+#define ADDR_BED_2 0b1010
+#define ADDR_BED_3 0b1011
+#define ADDR_STUDY 0b1101
+
+unsigned long getCommand(unsigned char command, unsigned char address) {
+  unsigned char addressShift = address << 4;
+  unsigned char code[4];
+  code[0] = codeBase[0];
+  code[1] = codeBase[1];
+  code[2] = codeBase[2] + addressShift;
+  code[3] = command;
+  return commandArrayToTransmit(code);
 }
 
 void loop()                           //some demo main code
@@ -82,15 +101,19 @@ void loop()                           //some demo main code
   auto high = !digitalRead(highIn);
   
   if(off) {
-    IRSendCode(codeOff);
+    unsigned long code = getCommand(CMD_OFF, ADDR_STUDY);
+    IRSendCode(code);
   }
   else if(low) {
-    IRSendCode(codeLow);
+    unsigned long code = getCommand(CMD_LOW, ADDR_STUDY);
+    IRSendCode(code);
   }
   else if(medium) {
-    IRSendCode(codeMedium);
+    unsigned long code = getCommand(CMD_MEDIUM, ADDR_STUDY);
+    IRSendCode(code);
   }
   else if(high) {
-    IRSendCode(codeHigh);
+    unsigned long code = getCommand(CMD_HIGH, ADDR_STUDY);
+    IRSendCode(code);
   }
 }
