@@ -1,30 +1,55 @@
 // https://gist.github.com/EEVblog/6206934
 
-#define offIn 8
-#define lowIn 9
-#define mediumIn 10
-#define highIn 11
+#define offIn A0
+#define lowIn A1
+#define mediumIn A2
+#define highIn A3
 
-#define IRLEDpin  3              //the arduino pin connected to IR LED to ground. HIGH=LED ON
+#define bedOne 4
+#define bedTwo 5
+#define bedThree 6
+#define study 7
+
+#define bedOneLed 8
+#define bedTwoLed 9
+#define bedThreeLed 10
+#define studyLed 11
+
+#define IRLEDpin  12              //the arduino pin connected to IR LED to ground. HIGH=LED ON
 #define BITtime   397            //length of the carrier bit in microseconds
 #define Setuptime   1640            //length of the carrier bit in microseconds
+
+static int address = bedOne;
 
 unsigned char codeBase[] = {0xA3, 0x16, 0x09, 0x00};
 
 void setup()
 {
-  IRsetup();                          //Only need to call this once to setup
-//  Serial.begin(115200);
-}
-
-void IRsetup(void)
-{
+  Serial.begin(9600);
   pinMode(offIn, INPUT_PULLUP);
   pinMode(lowIn, INPUT_PULLUP);
   pinMode(mediumIn, INPUT_PULLUP);
   pinMode(highIn, INPUT_PULLUP);
+
+  pinMode(bedOne, INPUT_PULLUP);
+  pinMode(bedTwo, INPUT_PULLUP);
+  pinMode(bedThree, INPUT_PULLUP);
+  pinMode(study, INPUT_PULLUP);
+
+  pinMode(bedOneLed, OUTPUT);
+  pinMode(bedTwoLed, OUTPUT);
+  pinMode(bedThreeLed, OUTPUT);
+  pinMode(studyLed, OUTPUT);
+  
   pinMode(IRLEDpin, OUTPUT);
+
   digitalWrite(IRLEDpin, LOW);    //turn off IR LED to start
+  digitalWrite(bedOneLed, LOW);
+  digitalWrite(bedTwoLed, LOW);
+  digitalWrite(bedThreeLed, LOW);
+  digitalWrite(studyLed, LOW);
+
+  delay(250);
 }
 
 void WriteBit(bool high)
@@ -99,21 +124,95 @@ void loop()                           //some demo main code
   auto low = !digitalRead(lowIn);
   auto medium = !digitalRead(mediumIn);
   auto high = !digitalRead(highIn);
+
+  if (!digitalRead(bedOne)) {
+    address = bedOne; 
+  } 
+  if (!digitalRead(bedTwo)) {
+    address = bedTwo; 
+  } 
+  if (!digitalRead(bedThree)) {
+    address = bedThree; 
+  } 
+  if (!digitalRead(study)) {
+    address = study; 
+  } 
+
+  writeAddressToLeds(address);
   
   if(off) {
-    unsigned long code = getCommand(CMD_OFF, ADDR_STUDY);
+    unsigned long code = getCommand(CMD_OFF, getDipCodeForRoom(address));
     IRSendCode(code);
   }
   else if(low) {
-    unsigned long code = getCommand(CMD_LOW, ADDR_STUDY);
+    unsigned long code = getCommand(CMD_LOW, getDipCodeForRoom(address));
     IRSendCode(code);
   }
   else if(medium) {
-    unsigned long code = getCommand(CMD_MEDIUM, ADDR_STUDY);
+    unsigned long code = getCommand(CMD_MEDIUM, getDipCodeForRoom(address));
     IRSendCode(code);
   }
   else if(high) {
-    unsigned long code = getCommand(CMD_HIGH, ADDR_STUDY);
+    unsigned long code = getCommand(CMD_HIGH, getDipCodeForRoom(address));
     IRSendCode(code);
   }
+
+  printSerialDebug();
+
+//  delay(100);
 }
+
+unsigned char getDipCodeForRoom(int addr) {
+    switch(addr) {
+  case bedOne:
+    return ADDR_BED_1;
+  case bedTwo:
+    return ADDR_BED_2;
+  case bedThree:
+    return ADDR_BED_3;
+  case study:
+    return ADDR_STUDY;
+  default:
+    return 0x00;
+  }
+}
+
+void writeAddressToLeds(int addr) {
+  // set all LEDs OFF
+  digitalWrite(bedOneLed, HIGH);
+  digitalWrite(bedTwoLed, HIGH);
+  digitalWrite(bedThreeLed, HIGH);
+  digitalWrite(studyLed, HIGH);
+
+  // write correct LED
+  switch(addr) {
+  case bedOne:
+    digitalWrite(bedOneLed, LOW);
+    break;
+  case bedTwo:
+    digitalWrite(bedTwoLed, LOW);
+    break;
+  case bedThree:
+    digitalWrite(bedThreeLed, LOW);
+    break;
+  case study:
+    digitalWrite(studyLed, LOW);
+    break;
+  default:
+    break;
+  }
+}
+
+void printSerialDebug() {
+  Serial.print(!digitalRead(bedOne));
+  Serial.print(!digitalRead(bedTwo));
+  Serial.print(!digitalRead(bedThree));
+  Serial.print(!digitalRead(study));
+  Serial.print(" ");
+  Serial.print(!digitalRead(offIn));
+  Serial.print(!digitalRead(lowIn));
+  Serial.print(!digitalRead(mediumIn));
+  Serial.print(!digitalRead(highIn));
+  Serial.println();
+}
+
