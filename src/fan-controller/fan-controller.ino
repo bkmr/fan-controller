@@ -1,5 +1,8 @@
 // https://gist.github.com/EEVblog/6206934
 
+#include <Wire.h>
+#include "Adafruit_MCP23017.h"
+
 #define offIn A0
 #define lowIn A1
 #define mediumIn A2
@@ -13,7 +16,8 @@
 #define bedOneLed 8
 #define bedTwoLed 9
 #define bedThreeLed 10
-#define studyLed 11
+#define studyLed 7
+#define pwmLed 11
 
 #define IRLEDpin  12              //the arduino pin connected to IR LED to ground. HIGH=LED ON
 #define BITtime   397            //length of the carrier bit in microseconds
@@ -22,6 +26,7 @@
 static int address = bedOne;
 
 unsigned char codeBase[] = {0xA3, 0x16, 0x09, 0x00};
+Adafruit_MCP23017 mcp;
 
 void setup()
 {
@@ -34,12 +39,13 @@ void setup()
   pinMode(bedOne, INPUT_PULLUP);
   pinMode(bedTwo, INPUT_PULLUP);
   pinMode(bedThree, INPUT_PULLUP);
-  pinMode(study, INPUT_PULLUP);
+//  pinMode(study, INPUT_PULLUP);
 
   pinMode(bedOneLed, OUTPUT);
   pinMode(bedTwoLed, OUTPUT);
   pinMode(bedThreeLed, OUTPUT);
   pinMode(studyLed, OUTPUT);
+  pinMode(pwmLed, OUTPUT);
   
   pinMode(IRLEDpin, OUTPUT);
 
@@ -48,6 +54,14 @@ void setup()
   digitalWrite(bedTwoLed, LOW);
   digitalWrite(bedThreeLed, LOW);
   digitalWrite(studyLed, LOW);
+
+  mcp.begin();
+  mcp.pinMode(7, INPUT);
+  mcp.pullUp(7, HIGH);  // turn on a 100K pullup internally
+
+  mcp.pinMode(8, OUTPUT);
+
+  analogWrite(pwmLed, 240);
 
   delay(250);
 }
@@ -134,9 +148,12 @@ void loop()                           //some demo main code
   if (!digitalRead(bedThree)) {
     address = bedThree; 
   } 
-  if (!digitalRead(study)) {
-    address = study; 
-  } 
+//  if (!digitalRead(study)) {
+//    address = study; 
+//  } 
+  if(!mcp.digitalRead(7)) {
+    address = study;
+  }
 
   writeAddressToLeds(address);
   
@@ -156,6 +173,8 @@ void loop()                           //some demo main code
     unsigned long code = getCommand(CMD_HIGH, getDipCodeForRoom(address));
     IRSendCode(code);
   }
+
+//  digitalWrite(studyLed, mcp.digitalRead(7));
 
   printSerialDebug();
 
@@ -183,6 +202,7 @@ void writeAddressToLeds(int addr) {
   digitalWrite(bedTwoLed, HIGH);
   digitalWrite(bedThreeLed, HIGH);
   digitalWrite(studyLed, HIGH);
+  mcp.digitalWrite(8, HIGH);
 
   // write correct LED
   switch(addr) {
@@ -197,6 +217,7 @@ void writeAddressToLeds(int addr) {
     break;
   case study:
     digitalWrite(studyLed, LOW);
+    mcp.digitalWrite(8, LOW);
     break;
   default:
     break;
@@ -207,7 +228,7 @@ void printSerialDebug() {
   Serial.print(!digitalRead(bedOne));
   Serial.print(!digitalRead(bedTwo));
   Serial.print(!digitalRead(bedThree));
-  Serial.print(!digitalRead(study));
+//  Serial.print(!digitalRead(study));
   Serial.print(" ");
   Serial.print(!digitalRead(offIn));
   Serial.print(!digitalRead(lowIn));
