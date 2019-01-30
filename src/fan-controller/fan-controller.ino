@@ -2,21 +2,22 @@
 
 #include <Wire.h>
 #include "Adafruit_MCP23017.h"
+#include "room.h"
 
-#define offIn A0
-#define lowIn A1
-#define mediumIn A2
-#define highIn A3
-
-#define bedOne 4
-#define bedTwo 5
-#define bedThree 6
-#define study 7
-
-#define bedOneLed 8
-#define bedTwoLed 9
-#define bedThreeLed 10
-#define studyLed 7
+//#define offIn A0
+//#define lowIn A1
+//#define mediumIn A2
+//#define highIn A3
+//
+#define bedOne 8
+#define bedTwo 10
+#define bedThree 12
+#define study 14
+//
+//#define bedOneLed 9
+//#define bedTwoLed 11
+//#define bedThreeLed 13
+//#define studyLed 15
 #define pwmLed 11
 
 #define IRLEDpin  12              //the arduino pin connected to IR LED to ground. HIGH=LED ON
@@ -24,44 +25,85 @@
 #define Setuptime   1640            //length of the carrier bit in microseconds
 
 static int address = bedOne;
+static boolean test;
+static boolean testIn;
+
+static SwitchLed switchOff = SwitchLed(0, 1);
+static SwitchLed switchLow = SwitchLed(2, 3);
+static SwitchLed switchMedium = SwitchLed(4, 5);
+static SwitchLed switchHigh = SwitchLed(6, 7);
+
+static SwitchLed switchOne = SwitchLed(8, 9);
+static SwitchLed switchTwo = SwitchLed(10, 11);
+static SwitchLed switchThree = SwitchLed(12, 13);
+static SwitchLed switchFour = SwitchLed(14, 15);
+
+// high nibble is DIP switch address on units
+#define ADDR_BED_1 0b1110
+#define ADDR_BED_2 0b1010
+#define ADDR_BED_3 0b1011
+#define ADDR_STUDY 0b1101
+
+static Room roomOne = Room(switchOne, ADDR_BED_1);
+static Room roomTwo = Room(switchTwo, ADDR_BED_2);
+static Room roomThree = Room(switchThree, ADDR_BED_3);
+static Room roomFour = Room(switchFour, ADDR_STUDY);
+
+static Room* selectedRoom = &roomOne;
+
+Adafruit_MCP23017 mcp;
+static uint16_t mcpInputs;
+static uint16_t mcpOutputs;
 
 unsigned char codeBase[] = {0xA3, 0x16, 0x09, 0x00};
-Adafruit_MCP23017 mcp;
 
 void setup()
 {
   Serial.begin(9600);
-  pinMode(offIn, INPUT_PULLUP);
-  pinMode(lowIn, INPUT_PULLUP);
-  pinMode(mediumIn, INPUT_PULLUP);
-  pinMode(highIn, INPUT_PULLUP);
-
-  pinMode(bedOne, INPUT_PULLUP);
-  pinMode(bedTwo, INPUT_PULLUP);
-  pinMode(bedThree, INPUT_PULLUP);
-//  pinMode(study, INPUT_PULLUP);
-
-  pinMode(bedOneLed, OUTPUT);
-  pinMode(bedTwoLed, OUTPUT);
-  pinMode(bedThreeLed, OUTPUT);
-  pinMode(studyLed, OUTPUT);
   pinMode(pwmLed, OUTPUT);
   
   pinMode(IRLEDpin, OUTPUT);
 
   digitalWrite(IRLEDpin, LOW);    //turn off IR LED to start
-  digitalWrite(bedOneLed, LOW);
-  digitalWrite(bedTwoLed, LOW);
-  digitalWrite(bedThreeLed, LOW);
-  digitalWrite(studyLed, LOW);
 
   mcp.begin();
-  mcp.pinMode(7, INPUT);
-  mcp.pullUp(7, HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchOff.switchPin(), INPUT);
+  mcp.pullUp(switchOff.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchLow.switchPin(), INPUT);
+  mcp.pullUp(switchLow.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchMedium.switchPin(), INPUT);
+  mcp.pullUp(switchMedium.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchHigh.switchPin(), INPUT);
+  mcp.pullUp(switchHigh.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchOne.switchPin(), INPUT);
+  mcp.pullUp(switchOne.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchTwo.switchPin(), INPUT);
+  mcp.pullUp(switchTwo.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchThree.switchPin(), INPUT);
+  mcp.pullUp(switchThree.switchPin(), HIGH);  // turn on a 100K pullup internally
+  mcp.pinMode(switchFour.switchPin(), INPUT);
+  mcp.pullUp(switchFour.switchPin(), HIGH);  // turn on a 100K pullup internally
 
-  mcp.pinMode(8, OUTPUT);
+  mcp.pinMode(switchOff.ledPin(), OUTPUT);
+  mcp.pinMode(switchLow.ledPin(), OUTPUT);
+  mcp.pinMode(switchMedium.ledPin(), OUTPUT);
+  mcp.pinMode(switchHigh.ledPin(), OUTPUT);
+  mcp.pinMode(switchOne.ledPin(), OUTPUT);
+  mcp.pinMode(switchTwo.ledPin(), OUTPUT);
+  mcp.pinMode(switchThree.ledPin(), OUTPUT);
+  mcp.pinMode(switchFour.ledPin(), OUTPUT);
+  
+  // turn on LEDs
+  mcp.digitalWrite(switchOff.ledPin(), HIGH);
+  mcp.digitalWrite(switchLow.ledPin(), HIGH);
+  mcp.digitalWrite(switchMedium.ledPin(), HIGH);
+  mcp.digitalWrite(switchHigh.ledPin(), HIGH);
+  mcp.digitalWrite(switchOne.ledPin(), HIGH);
+  mcp.digitalWrite(switchTwo.ledPin(), HIGH);
+  mcp.digitalWrite(switchThree.ledPin(), HIGH);
+  mcp.digitalWrite(switchFour.ledPin(), HIGH);
 
-  analogWrite(pwmLed, 240);
+//analogWrite(pwmLed, 0);
 
   delay(250);
 }
@@ -116,12 +158,6 @@ unsigned long commandArrayToTransmit(unsigned char cmd[]) {
 #define CMD_MEDIUM 0x10
 #define CMD_HIGH   0x11
 
-// high nibble is DIP switch address on units
-#define ADDR_BED_1 0b1110
-#define ADDR_BED_2 0b1010
-#define ADDR_BED_3 0b1011
-#define ADDR_STUDY 0b1101
-
 unsigned long getCommand(unsigned char command, unsigned char address) {
   unsigned char addressShift = address << 4;
   unsigned char code[4];
@@ -132,108 +168,123 @@ unsigned long getCommand(unsigned char command, unsigned char address) {
   return commandArrayToTransmit(code);
 }
 
-void loop()                           //some demo main code
+void loop()
 {
-  auto off = !digitalRead(offIn);
-  auto low = !digitalRead(lowIn);
-  auto medium = !digitalRead(mediumIn);
-  auto high = !digitalRead(highIn);
+  // get inputs
+  mcpInputs = mcp.readGPIOAB();
+  
+  auto one =   !(mcpInputs & 0x1 << switchOne.switchPin());
+  auto two =   !(mcpInputs & 0x1 << switchTwo.switchPin());
+  auto three = !(mcpInputs & 0x1 << switchThree.switchPin());
+  auto four =  !(mcpInputs & 0x1 << switchFour.switchPin());
+  if(one) selectedRoom = &roomOne;
+  if(two) selectedRoom = &roomTwo;
+  if(three) selectedRoom = &roomThree;
+  if(four) selectedRoom = &roomFour;
+  
+  auto off =    !(mcpInputs & 0x1 << switchOff.switchPin());
+  auto low =    !(mcpInputs & 0x1 << switchLow.switchPin());
+  auto medium = !(mcpInputs & 0x1 << switchMedium.switchPin());
+  auto high =   !(mcpInputs & 0x1 << switchHigh.switchPin());
+  // check for change of fan state
+  auto fanSelectActive = off || low || medium || high;
+  if(fanSelectActive) {
+    auto fanSpeed = selectedRoom->fanSpeed;
+    auto newFan = (fanSpeed == Room::FanSpeed::FAN_OFF && !off) ||
+                  (fanSpeed == Room::FanSpeed::FAN_LOW && !low) ||
+                  (fanSpeed == Room::FanSpeed::FAN_MEDIUM && !medium) ||
+                  (fanSpeed == Room::FanSpeed::FAN_HIGH && !high);
+    if(newFan) {
+      if(off)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_OFF;
+      if(low)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_LOW;
+      if(medium) selectedRoom->fanSpeed = Room::FanSpeed::FAN_MEDIUM;
+      if(high)   selectedRoom->fanSpeed = Room::FanSpeed::FAN_HIGH;
 
-  if (!digitalRead(bedOne)) {
-    address = bedOne; 
-  } 
-  if (!digitalRead(bedTwo)) {
-    address = bedTwo; 
-  } 
-  if (!digitalRead(bedThree)) {
-    address = bedThree; 
-  } 
+      // write fanSpeed to RF
+      unsigned long command;
+      switch(selectedRoom->fanSpeed) {
+      case Room::FanSpeed::FAN_OFF:
+        command = getCommand(CMD_OFF, selectedRoom->address());
+        break;
+      case Room::FanSpeed::FAN_LOW:
+        command = getCommand(CMD_LOW, selectedRoom->address());
+        break;
+      case Room::FanSpeed::FAN_MEDIUM:
+        command = getCommand(CMD_MEDIUM, selectedRoom->address());
+        break;
+      case Room::FanSpeed::FAN_HIGH:
+        command = getCommand(CMD_HIGH, selectedRoom->address());
+        break;
+      default:
+        command = getCommand(CMD_OFF, selectedRoom->address());
+        break;
+      }
+      IRSendCode(command);
+    }
+  }
+  
+  // write output leds
+  mcpOutputs = 0;
+  if(selectedRoom == &roomOne) mcpOutputs += 0x1 << switchOne.ledPin();
+  if(selectedRoom == &roomTwo) mcpOutputs += 0x1 << switchTwo.ledPin();
+  if(selectedRoom == &roomThree) mcpOutputs += 0x1 << switchThree.ledPin();
+  if(selectedRoom == &roomFour) mcpOutputs += 0x1 << switchFour.ledPin();
+  mcpOutputs += 0x1 << switchOff.ledPin();
+  mcpOutputs += 0x1 << switchLow.ledPin();
+  mcpOutputs += 0x1 << switchMedium.ledPin();
+  mcpOutputs += 0x1 << switchHigh.ledPin();
+  mcp.writeGPIOAB(mcpOutputs);
+  
+//  auto off = !digitalRead(offIn);
+//  auto low = !digitalRead(lowIn);
+//  auto medium = !digitalRead(mediumIn);
+//  auto high = !digitalRead(highIn);
+
+//  if (!digitalRead(bedOne)) {
+//    address = bedOne; 
+//  } 
+//  if (!digitalRead(bedTwo)) {
+//    address = bedTwo; 
+//  } 
+//  if (!digitalRead(bedThree)) {
+//    address = bedThree; 
+//  } 
 //  if (!digitalRead(study)) {
 //    address = study; 
-//  } 
-  if(!mcp.digitalRead(7)) {
-    address = study;
-  }
-
-  writeAddressToLeds(address);
-  
-  if(off) {
-    unsigned long code = getCommand(CMD_OFF, getDipCodeForRoom(address));
-    IRSendCode(code);
-  }
-  else if(low) {
-    unsigned long code = getCommand(CMD_LOW, getDipCodeForRoom(address));
-    IRSendCode(code);
-  }
-  else if(medium) {
-    unsigned long code = getCommand(CMD_MEDIUM, getDipCodeForRoom(address));
-    IRSendCode(code);
-  }
-  else if(high) {
-    unsigned long code = getCommand(CMD_HIGH, getDipCodeForRoom(address));
-    IRSendCode(code);
-  }
-
-//  digitalWrite(studyLed, mcp.digitalRead(7));
-
+//  }
+// testIn = mcp.digitalRead(6);
+//  if(!testIn) {
+//    address = study;
+//    test = !test;
+////    mcp.digitalWrite(7, test);
+//    if(test) {
+//        analogWrite(pwmLed, 0);
+//    }
+//    else {
+//        analogWrite(pwmLed, 240);
+//    }
+//    delay(250);
+//  }
+//
   printSerialDebug();
 
 //  delay(100);
 }
 
-unsigned char getDipCodeForRoom(int addr) {
-    switch(addr) {
-  case bedOne:
-    return ADDR_BED_1;
-  case bedTwo:
-    return ADDR_BED_2;
-  case bedThree:
-    return ADDR_BED_3;
-  case study:
-    return ADDR_STUDY;
-  default:
-    return 0x00;
-  }
-}
-
-void writeAddressToLeds(int addr) {
-  // set all LEDs OFF
-  digitalWrite(bedOneLed, HIGH);
-  digitalWrite(bedTwoLed, HIGH);
-  digitalWrite(bedThreeLed, HIGH);
-  digitalWrite(studyLed, HIGH);
-  mcp.digitalWrite(8, HIGH);
-
-  // write correct LED
-  switch(addr) {
-  case bedOne:
-    digitalWrite(bedOneLed, LOW);
-    break;
-  case bedTwo:
-    digitalWrite(bedTwoLed, LOW);
-    break;
-  case bedThree:
-    digitalWrite(bedThreeLed, LOW);
-    break;
-  case study:
-    digitalWrite(studyLed, LOW);
-    mcp.digitalWrite(8, LOW);
-    break;
-  default:
-    break;
-  }
-}
 
 void printSerialDebug() {
-  Serial.print(!digitalRead(bedOne));
-  Serial.print(!digitalRead(bedTwo));
-  Serial.print(!digitalRead(bedThree));
-//  Serial.print(!digitalRead(study));
+//  Serial.print(!digitalRead(bedOne));
+//  Serial.print(!digitalRead(bedTwo));
+//  Serial.print(!digitalRead(bedThree));
+////  Serial.print(!digitalRead(study));
+//  Serial.print(" ");
+//  Serial.print(!digitalRead(offIn));
+//  Serial.print(!digitalRead(lowIn));
+//  Serial.print(!digitalRead(mediumIn));
+//  Serial.print(!digitalRead(highIn));
+  Serial.print(mcpInputs, BIN);
   Serial.print(" ");
-  Serial.print(!digitalRead(offIn));
-  Serial.print(!digitalRead(lowIn));
-  Serial.print(!digitalRead(mediumIn));
-  Serial.print(!digitalRead(highIn));
+  Serial.print(mcpOutputs, BIN);
   Serial.println();
 }
 
