@@ -4,20 +4,10 @@
 #include "Adafruit_MCP23017.h"
 #include "room.h"
 
-//#define offIn A0
-//#define lowIn A1
-//#define mediumIn A2
-//#define highIn A3
-//
 #define bedOne 8
 #define bedTwo 10
 #define bedThree 12
 #define study 14
-//
-//#define bedOneLed 9
-//#define bedTwoLed 11
-//#define bedThreeLed 13
-//#define studyLed 15
 #define pwmLed 11
 
 #define IRLEDpin  12              //the arduino pin connected to IR LED to ground. HIGH=LED ON
@@ -102,9 +92,6 @@ void setup()
   mcp.digitalWrite(switchTwo.ledPin(), HIGH);
   mcp.digitalWrite(switchThree.ledPin(), HIGH);
   mcp.digitalWrite(switchFour.ledPin(), HIGH);
-
-//analogWrite(pwmLed, 0);
-
   delay(250);
 }
 
@@ -235,40 +222,8 @@ void loop()
   mcpOutputs += 0x1 << switchHigh.ledPin();
   mcp.writeGPIOAB(mcpOutputs);
   
-//  auto off = !digitalRead(offIn);
-//  auto low = !digitalRead(lowIn);
-//  auto medium = !digitalRead(mediumIn);
-//  auto high = !digitalRead(highIn);
 
-//  if (!digitalRead(bedOne)) {
-//    address = bedOne; 
-//  } 
-//  if (!digitalRead(bedTwo)) {
-//    address = bedTwo; 
-//  } 
-//  if (!digitalRead(bedThree)) {
-//    address = bedThree; 
-//  } 
-//  if (!digitalRead(study)) {
-//    address = study; 
-//  }
-// testIn = mcp.digitalRead(6);
-//  if(!testIn) {
-//    address = study;
-//    test = !test;
-////    mcp.digitalWrite(7, test);
-//    if(test) {
-//        analogWrite(pwmLed, 0);
-//    }
-//    else {
-//        analogWrite(pwmLed, 240);
-//    }
-//    delay(250);
-//  }
-//
-  printSerialDebug();
-
-//  delay(100);
+//  printSerialDebug();
 }
 
 
