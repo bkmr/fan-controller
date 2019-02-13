@@ -11,6 +11,7 @@
 #define pwmLed 11
 
 #define IRLEDpin  12              //the arduino pin connected to IR LED to ground. HIGH=LED ON
+#define notifyLed 13
 #define BITtime   397            //length of the carrier bit in microseconds
 #define Setuptime   1640            //length of the carrier bit in microseconds
 
@@ -51,10 +52,12 @@ void setup()
 {
   Serial.begin(9600);
   pinMode(pwmLed, OUTPUT);
+  pinMode(notifyLed, OUTPUT);
   
   pinMode(IRLEDpin, OUTPUT);
 
   digitalWrite(IRLEDpin, LOW);    //turn off IR LED to start
+  digitalWrite(notifyLed, HIGH);    //turn on notify LED to start
 
   mcp.begin();
   mcp.pinMode(switchOff.switchPin(), INPUT);
@@ -176,38 +179,32 @@ void loop()
   // check for change of fan state
   auto fanSelectActive = off || low || medium || high;
   if(fanSelectActive) {
-    auto fanSpeed = selectedRoom->fanSpeed;
-    auto newFan = (fanSpeed == Room::FanSpeed::FAN_OFF && !off) ||
-                  (fanSpeed == Room::FanSpeed::FAN_LOW && !low) ||
-                  (fanSpeed == Room::FanSpeed::FAN_MEDIUM && !medium) ||
-                  (fanSpeed == Room::FanSpeed::FAN_HIGH && !high);
-    if(newFan) {
-      if(off)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_OFF;
-      if(low)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_LOW;
-      if(medium) selectedRoom->fanSpeed = Room::FanSpeed::FAN_MEDIUM;
-      if(high)   selectedRoom->fanSpeed = Room::FanSpeed::FAN_HIGH;
+    digitalWrite(notifyLed, HIGH);    // set notify
+    if(off)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_OFF;
+    if(low)    selectedRoom->fanSpeed = Room::FanSpeed::FAN_LOW;
+    if(medium) selectedRoom->fanSpeed = Room::FanSpeed::FAN_MEDIUM;
+    if(high)   selectedRoom->fanSpeed = Room::FanSpeed::FAN_HIGH;
 
-      // write fanSpeed to RF
-      unsigned long command;
-      switch(selectedRoom->fanSpeed) {
-      case Room::FanSpeed::FAN_OFF:
-        command = getCommand(CMD_OFF, selectedRoom->address());
-        break;
-      case Room::FanSpeed::FAN_LOW:
-        command = getCommand(CMD_LOW, selectedRoom->address());
-        break;
-      case Room::FanSpeed::FAN_MEDIUM:
-        command = getCommand(CMD_MEDIUM, selectedRoom->address());
-        break;
-      case Room::FanSpeed::FAN_HIGH:
-        command = getCommand(CMD_HIGH, selectedRoom->address());
-        break;
-      default:
-        command = getCommand(CMD_OFF, selectedRoom->address());
-        break;
-      }
-      IRSendCode(command);
+    // write fanSpeed to RF
+    unsigned long command;
+    switch(selectedRoom->fanSpeed) {
+    case Room::FanSpeed::FAN_OFF:
+      command = getCommand(CMD_OFF, selectedRoom->address());
+      break;
+    case Room::FanSpeed::FAN_LOW:
+      command = getCommand(CMD_LOW, selectedRoom->address());
+      break;
+    case Room::FanSpeed::FAN_MEDIUM:
+      command = getCommand(CMD_MEDIUM, selectedRoom->address());
+      break;
+    case Room::FanSpeed::FAN_HIGH:
+      command = getCommand(CMD_HIGH, selectedRoom->address());
+      break;
+    default:
+      command = getCommand(CMD_OFF, selectedRoom->address());
+      break;
     }
+    IRSendCode(command);
   }
   
   // write output leds
@@ -222,6 +219,7 @@ void loop()
   mcpOutputs += 0x1 << switchHigh.ledPin();
   mcp.writeGPIOAB(mcpOutputs);
   
+  digitalWrite(notifyLed, LOW);    // clear notify
 
 //  printSerialDebug();
 }
